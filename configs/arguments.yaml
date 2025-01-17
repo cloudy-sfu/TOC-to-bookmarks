@@ -1,0 +1,101 @@
+# params for prediction engine
+use_gpu: false
+gpu_mem: 500
+warmup: true
+
+# params for text detector
+det_algorithm: DB
+det_model_path: infer/ch_ptocr_v4_det_server_infer.pth
+det_limit_side_len: 960.0
+det_limit_type: max
+
+# DB params
+det_db_thresh: 0.3
+det_db_box_thresh: 0.6
+det_db_unclip_ratio: 1.5
+max_batch_size: 10
+use_dilation: false
+det_db_score_mode: fast
+
+# EAST params
+det_east_score_thresh: 0.8
+det_east_cover_thresh: 0.1
+det_east_nms_thresh: 0.2
+
+# SAST params
+det_sast_score_thresh: 0.5
+det_sast_nms_thresh: 0.2
+det_sast_polygon: false
+
+# PSE params
+det_pse_thresh: 0.0
+det_pse_box_thresh: 0.85
+det_pse_min_area: 16.0
+det_pse_box_type: box
+det_pse_scale: 1
+
+# FCE params
+scales: [8, 16, 32]
+alpha: 1.0
+beta: 1.0
+fourier_degree: 5
+det_fce_box_type: poly
+
+# params for text recognizer
+rec_algorithm: CRNN
+rec_model_path: infer/ch_ptocr_v4_rec_server_infer.pth
+rec_image_inverse: true
+rec_image_shape: "3, 48, 320"
+rec_char_type: ch
+rec_batch_num: 6
+max_text_length: 25
+use_space_char: true
+drop_score: 0.5
+limited_max_width: 1280
+limited_min_width: 16
+rec_char_dict_path: pytorchocr/utils/ppocr_keys_v1.txt
+
+# params for text classifier
+use_angle_cls: false
+cls_model_path: 
+cls_image_shape: "3, 48, 192"
+label_list: ["0", "180"]
+cls_batch_num: 6
+cls_thresh: 0.9
+
+enable_mkldnn: false
+use_pdserving: false
+
+# params for e2e
+e2e_algorithm: PGNet
+e2e_model_path: 
+e2e_limit_side_len: 768.0
+e2e_limit_type: max
+
+# PGNet params
+e2e_pgnet_score_thresh: 0.5
+e2e_char_dict_path: pytorchocr/utils/ic15_dict.txt
+e2e_pgnet_valid_set: totaltext
+e2e_pgnet_polygon: true
+e2e_pgnet_mode: fast
+
+# SR params
+sr_model_path: 
+sr_image_shape: "3, 32, 128"
+sr_batch_num: 1
+
+# params .yaml
+det_yaml_path: configs/det/ch_PP-OCRv4_det_teacher.yml
+rec_yaml_path: configs/rec/ch_PP-OCRv4_rec_hgnet.yml
+cls_yaml_path: 
+e2e_yaml_path: 
+sr_yaml_path: 
+
+# multi-process
+use_mp: false
+total_process_num: 1
+process_id: 0
+
+benchmark: false
+save_log_path: 
+show_log: false
