@@ -16,12 +16,100 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cv2
 import math
-
-import numpy as np
 from itertools import groupby
-from skimage.morphology._skeletonize import thin
+
+import cv2
+import numpy as np
+import scipy.ndimage as ndi
+
+G123_LUT = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                     0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
+                     0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                     0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                     0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                     1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0,
+                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0,
+                     0, 1, 1, 0, 0, 1, 0, 0, 0], dtype=bool)
+
+G123P_LUT = np.array([0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0,
+                      0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                      1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1,
+                      0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                      0, 0, 0, 0, 0, 0, 0, 0, 0], dtype=bool)
+
+def check_nd(array, ndim, arg_name='image'):
+    """
+    Verify an array meets the desired ndims and array isn't empty.
+
+    Parameters
+    ----------
+    array : array-like
+        Input array to be validated
+    ndim : int or iterable of ints
+        Allowable ndim or ndims for the array.
+    arg_name : str, optional
+        The name of the array in the original function.
+
+    """
+    array = np.asanyarray(array)
+    msg_incorrect_dim = "The parameter `%s` must be a %s-dimensional array"
+    msg_empty_array = "The parameter `%s` cannot be an empty array"
+    if isinstance(ndim, int):
+        ndim = [ndim]
+    if array.size == 0:
+        raise ValueError(msg_empty_array % arg_name)
+    if array.ndim not in ndim:
+        raise ValueError(
+            msg_incorrect_dim % (arg_name, '-or-'.join([str(n) for n in ndim]))
+        )
+
+def thin(image, max_num_iter=None):
+    # check that image is 2d
+    check_nd(image, 2)
+
+    # convert image to uint8 with values in {0, 1}
+    skel = np.asanyarray(image, dtype=bool).copy().view(np.uint8)
+
+    # neighborhood mask
+    mask = np.array([[8, 4, 2], [16, 0, 1], [32, 64, 128]], dtype=np.uint8)
+
+    # iterate until convergence, up to the iteration limit
+    max_num_iter = max_num_iter or np.inf
+    num_iter = 0
+    n_pts_old, n_pts_new = np.inf, np.sum(skel)
+    while n_pts_old != n_pts_new and num_iter < max_num_iter:
+        n_pts_old = n_pts_new
+
+        # perform the two "subiterations" described in the paper
+        for lut in [G123_LUT, G123P_LUT]:
+            # correlate image with neighborhood mask
+            N = ndi.correlate(skel, mask, mode='constant')
+            # take deletion decision from this subiteration's LUT
+            D = np.take(lut, N)
+            # perform deletion
+            skel[D] = 0
+
+        n_pts_new = np.sum(skel)  # count points after thinning
+        num_iter += 1
+
+    return skel.astype(bool)
+
 
 
 def get_dict(character_dict_path):

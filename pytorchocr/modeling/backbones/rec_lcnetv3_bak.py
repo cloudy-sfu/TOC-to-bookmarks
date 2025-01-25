@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorchocr.modeling.common import Activation
+import numpy as np
 
 NET_CONFIG_det = {
     "blocks2":
@@ -425,7 +426,7 @@ class PPLCNetV3(nn.Module):
         out_list.append(x)
         x = self.blocks5(x)
         out_list.append(x)
-        import numpy as np
+
         x = torch.Tensor(np.load('../PaddleOCR4debug/tmp.npy'))
         x = self.blocks6(x)
         out_list.append(x)
