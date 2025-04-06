@@ -76,28 +76,28 @@ else:
     assert 1 <= main_first_page <= n, "Start page of main content is invalid."
 
 if ocr_enabled:
-    # %% Initialize OCR model.
+    # Initialize OCR model.
     logging.info("[3/6] Initialize OCR model.")
     with open("configs/arguments.yaml", "r", encoding="utf-8") as f:
         yaml_config = yaml.safe_load(f)
     ns = Namespace(**yaml_config)
     text_system = TextSystem(ns)
 
-    # %% Run OCR.
+    # Run OCR.
     logging.info("[4/6] Generate TOC.")
-    content_tables = []
+    toc = []
     for i in tqdm(range(toc_first_page, toc_last_page + 1), desc="Pages"):
         page = viewer.to_cv2_array(i)
         content_table = text_system(page)
         content_table.insert(loc=0, column="page", value=i)
-        content_tables.append(content_table)
-    # close and unlock the file as early as possible, thus not closing at the end of "if".
-    viewer.document.close()
-    content_tables = pd.concat(content_tables, ignore_index=True, axis=0)
-    content_tables['text'] = content_tables['text'].map(full_to_half_digit)
+        content_table['text'] = content_table['text'].map(full_to_half_digit)
 
-    # %% Organize TOC structure.
-    toc = get_toc(content_tables)
+        # Organize TOC structure.
+        toc_ = get_toc(content_table)
+        toc.append(toc_)
+
+    viewer.document.close()
+    toc = pd.concat(toc, ignore_index=True, axis=0)
 else:
     viewer.document.close()
 

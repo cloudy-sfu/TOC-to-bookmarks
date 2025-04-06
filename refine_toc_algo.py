@@ -62,40 +62,47 @@ def find_title_box(row, others):
         case 1:
             return others_2.iloc[0, :]
         case _:  # >= 2
-            common_y_ub = np.maximum(others_2['left_upper_y'], others_2['right_upper_y'], inner_y_ub)
-            common_y_lb = np.minimum(others_2['left_lower_y'], others_2['right_lower_y'], inner_y_lb)
-            b = np.argmax(np.maximum(0, common_y_lb - common_y_ub))
-            return others_2.iloc[b, :]
+            return pd.Series({
+                'page': others_2.iloc[0, :],
+                'left_upper_x': others_2['left_upper_x'].min().astype(int),
+                'left_upper_y': others_2['left_upper_y'].min().astype(int),
+                'right_upper_x': others_2['right_upper_x'].max().astype(int),
+                'right_upper_y': others_2['right_upper_y'].min().astype(int),
+                'right_lower_x': others_2['right_lower_x'].max().astype(int),
+                'right_lower_y': others_2['right_lower_y'].max().astype(int),
+                'left_lower_x': others_2['left_lower_x'].min().astype(int),
+                'left_lower_y': others_2['left_lower_y'].max().astype(int),
+                'text': others_2.sort_values(
+                    by=['left_upper_x', 'left_upper_y'],
+                    key=lambda x: others_2['left_upper_x'] + others_2['left_upper_y']
+                )['text'].astype(str).str.cat(sep=' ')
+            })
 
 
 def get_toc(content_table):
-    toc = []
-    for page, ct in content_table.groupby('page'):
-        # Rotate to horizontal 0 degree.
-        tan_alpha = get_rotated_angle(ct)
-        for vertex in ['left_upper', 'left_lower', 'right_upper', 'right_lower']:
-            ct[f'{vertex}_x'] = ct[f'{vertex}_x'] + tan_alpha * ct[f'{vertex}_y']
+    # Rotate to horizontal 0 degree.
+    tan_alpha = get_rotated_angle(content_table)
+    for vertex in ['left_upper', 'left_lower', 'right_upper', 'right_lower']:
+        content_table[f'{vertex}_x'] = content_table[f'{vertex}_x'] + tan_alpha * content_table[f'{vertex}_y']
 
-        page_numbers_right = mode(content_table['right_upper_x']).mode
-        page_numbers_idx_1 = ct['right_upper_x'] == page_numbers_right
-        tol = (ct.loc[page_numbers_idx_1, 'right_upper_x'] -
-               ct.loc[page_numbers_idx_1, 'left_upper_x']).mean() / 2
-        page_numbers_idx_2 = (page_numbers_right - tol < ct['right_upper_x']) & (
-                ct['right_upper_x'] < page_numbers_right + tol)
-        page_numbers = ct[page_numbers_idx_2]
-        titles = page_numbers.apply(
-            find_title_box, axis=1, args=(ct[~page_numbers_idx_2], ))
-        dbscan = DBSCAN1D(eps=tol, min_samples=2)
-        labels = dbscan.fit_predict(titles['left_upper_x'].values)
-        labels = np.where(labels == -1, np.nan, labels + 1)
-        toc_page = pd.DataFrame({
-            'level': labels,
-            'title': titles['text'],
-            'page_number': page_numbers['text'],
-        })
-        toc.append(toc_page)
-    toc = pd.concat(toc, axis=0, ignore_index=True)
-    return toc
+    page_numbers_right = mode(content_table['right_upper_x']).mode
+    page_numbers_idx_1 = content_table['right_upper_x'] == page_numbers_right
+    tol = (content_table.loc[page_numbers_idx_1, 'right_upper_x'] -
+           content_table.loc[page_numbers_idx_1, 'left_upper_x']).mean() / 2
+    page_numbers_idx_2 = (page_numbers_right - tol < content_table['right_upper_x']) & (
+            content_table['right_upper_x'] < page_numbers_right + tol)
+    page_numbers = content_table[page_numbers_idx_2]
+    titles = page_numbers.apply(
+        find_title_box, axis=1, args=(content_table[~page_numbers_idx_2],))
+    dbscan = DBSCAN1D(eps=tol, min_samples=2)
+    labels = dbscan.fit_predict(titles['left_upper_x'].values)
+    labels = np.where(labels == -1, np.nan, labels + 1)
+    toc_page = pd.DataFrame({
+        'level': labels,
+        'title': titles['text'],
+        'page_number': page_numbers['text'],
+    })
+    return toc_page
 
 
 if __name__ == '__main__':
