@@ -1,20 +1,34 @@
-import os
-import imghdr
-import cv2
 import logging
+import os
+
+import cv2
+import numpy as np
+from PIL import Image, UnidentifiedImageError
+
+_SUPPORTED_IMAGE_FORMATS = {'jpg', 'bmp', 'png', 'jpeg', 'rgb', 'tif', 'tiff', 'gif'}
+
+
+def _is_supported_image(file_path):
+    if not os.path.isfile(file_path):
+        return False
+    try:
+        with Image.open(file_path) as img:
+            return (img.format or '').lower() in _SUPPORTED_IMAGE_FORMATS
+    except (UnidentifiedImageError, OSError):
+        return False
+
 
 def get_image_file_list(img_file):
     imgs_lists = []
     if img_file is None or not os.path.exists(img_file):
         raise Exception("not found any img file in {}".format(img_file))
 
-    img_end = {'jpg', 'bmp', 'png', 'jpeg', 'rgb', 'tif', 'tiff', 'gif', 'GIF'}
-    if os.path.isfile(img_file) and imghdr.what(img_file) in img_end:
+    if _is_supported_image(img_file):
         imgs_lists.append(img_file)
     elif os.path.isdir(img_file):
         for single_file in os.listdir(img_file):
             file_path = os.path.join(img_file, single_file)
-            if imghdr.what(file_path) in img_end:
+            if _is_supported_image(file_path):
                 imgs_lists.append(file_path)
     if len(imgs_lists) == 0:
         raise Exception("not found any img file in {}".format(img_file))
@@ -51,7 +65,6 @@ def check_and_read(img_path):
         return imgvalue, True, False
     elif os.path.basename(img_path)[-3:] in ['pdf']:
         import fitz
-        from PIL import Image
         imgs = []
         with fitz.open(img_path) as pdf:
             for pg in range(0, pdf.pageCount):
@@ -63,7 +76,7 @@ def check_and_read(img_path):
                 if pm.width > 2000 or pm.height > 2000:
                     pm = page.getPixmap(matrix=fitz.Matrix(1, 1), alpha=False)
 
-                img = Image.frombytes("RGB", [pm.width, pm.height], pm.samples)
+                img = Image.frombytes("RGB", (pm.width, pm.height), pm.samples)
                 img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                 imgs.append(img)
             return imgs, False, True

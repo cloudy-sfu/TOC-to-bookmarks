@@ -1,3 +1,6 @@
+# Must import before PyQt, ref: https://github.com/pytorch/pytorch/issues/166628
+import torch
+
 import logging
 import sys
 import traceback
@@ -5,7 +8,7 @@ from argparse import Namespace
 
 import pandas as pd
 import yaml
-from PyQt5.QtWidgets import QApplication, QDialog
+from PyQt6.QtWidgets import QApplication, QDialog
 from tqdm import tqdm
 
 from ask_ocr import OCRDialog
@@ -32,7 +35,7 @@ sys.excepthook = handle_exception
 
 # %% Ask OCR.
 ocr_dialog = OCRDialog()
-ocr_enabled = ocr_dialog.exec_() == QDialog.Accepted
+ocr_enabled = ocr_dialog.exec() == QDialog.DialogCode.Accepted
 
 # %% Get file path.
 logging.info("[1/6] Interactive: open the book.")
@@ -47,13 +50,13 @@ if ocr_enabled:
     viewer.set_text_name("Browse to the first page of \"Table of Content\".")
     viewer.show()
     viewer.render_page(1)
-    app.exec_()
+    app.exec()
     toc_first_page = viewer.current_page
 
     viewer.set_text_name("Browse to the last page of \"Table of Content\".")
     viewer.show()
     viewer.render_page(toc_first_page)
-    app.exec_()
+    app.exec()
     toc_last_page = viewer.current_page
     logging.info(f"TOC is from physical page {toc_first_page} to {toc_last_page}.")
     assert 1 <= toc_first_page <= toc_last_page, "Page range of TOC is invalid."
@@ -64,7 +67,7 @@ if ocr_enabled:
     viewer.render_page(toc_last_page)
 else:
     viewer.render_page(1)
-app.exec_()
+app.exec()
 main_first_page = viewer.current_page
 logging.info(f"Main content is from physical page {main_first_page}.")
 
@@ -107,11 +110,14 @@ toc_refinement = TocRefinement()
 if ocr_enabled:
     toc_refinement.set_table(toc)
 toc_refinement.show()
-app.exec_()
+app.exec()
 toc = toc_refinement.get_table()
 
 # %% Insert bookmarks.
-logging.info("[6/6] Insert bookmarks to the book.")
-toc['page_number'] = toc['page_number'] + main_first_page - 1
-new_fp = export(fp, toc)
-logging.info(f"The modified book is saved at {new_fp}")
+if toc_refinement.accept_:
+    logging.info("[6/6] Insert bookmarks to the book.")
+    toc['page_number'] = toc['page_number'] + main_first_page - 1
+    new_fp = export(fp, toc)
+    logging.info(f"The modified book is saved at {new_fp}")
+else:
+    logging.info("TOC discarded.")

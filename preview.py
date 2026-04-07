@@ -4,9 +4,9 @@ import sys
 import cv2
 import fitz  # PyMuPDF
 import numpy as np
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QImage
-from PyQt5.QtWidgets import (
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QImage
+from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QLineEdit, QHBoxLayout,
     QVBoxLayout, QLabel, QWidget, QMessageBox, QFileDialog
 )
@@ -17,7 +17,7 @@ class PDFViewer(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("PDF Viewer")
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         self.filepath = filepath
         self.current_page = 1
         screen = QApplication.primaryScreen()
@@ -82,7 +82,7 @@ class PDFViewer(QMainWindow):
 
         # PDF Preview Area
         self.preview_label = QLabel()
-        self.preview_label.setAlignment(Qt.AlignCenter)
+        self.preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # forbid to set border, otherwise "preview_label" will gradually enlarge (2 *
         # border width) pixels when turning pages
         self.preview_label.setStyleSheet(f"font-size: {font_size}px;")
@@ -114,12 +114,14 @@ class PDFViewer(QMainWindow):
         self.current_page = targeted_page
         page = self.document[self.current_page - 1]
         pix = page.get_pixmap(dpi=400)
-        qimage = QImage(pix.samples, pix.width, pix.height, pix.stride,
-                        QImage.Format_RGB888)
-        pixmap = QPixmap.fromImage(qimage)
+        q_image = QImage(pix.samples, pix.width, pix.height, pix.stride,
+                         QImage.Format.Format_RGB888)
+        pixmap = QPixmap.fromImage(q_image)
         # Scale the pixmap to fit the label with "letter" aspect ratio
         scaled_pixmap = pixmap.scaled(
-            self.preview_label.width(), self.preview_label.height(), Qt.KeepAspectRatio)
+            self.preview_label.width(), self.preview_label.height(),
+            Qt.AspectRatioMode.KeepAspectRatio
+        )
         self.preview_label.setPixmap(scaled_pixmap)
 
     def to_cv2_array(self, targeted_page):
@@ -151,11 +153,11 @@ class PDFViewer(QMainWindow):
     def show_error_window(self, message):
         error_dialog = QMessageBox(self)
         error_dialog.setText(message)
-        error_dialog.setIcon(QMessageBox.Warning)
-        error_dialog.setStandardButtons(QMessageBox.Ok)
+        error_dialog.setIcon(QMessageBox.Icon.Warning)
+        error_dialog.setStandardButtons(QMessageBox.StandardButton.Ok)
         # Block interaction with main window until this dialog is closed
         error_dialog.setModal(True)
-        error_dialog.exec_()
+        error_dialog.exec()
 
 
 def get_file():
@@ -170,8 +172,8 @@ def get_file():
     else:
         # Display an error message box
         error_box = QMessageBox()
-        error_box.setIcon(QMessageBox.Critical)
+        error_box.setIcon(QMessageBox.Icon.Critical)
+        error_box.setStandardButtons(QMessageBox.StandardButton.Ok)
         error_box.setWindowTitle("Error")
         error_box.setText("The selected file path is invalid.")
-        error_box.setStandardButtons(QMessageBox.Ok)
         return None

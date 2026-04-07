@@ -2,11 +2,12 @@ import os
 import sys
 
 import pandas as pd
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
-    QPushButton, QDialog, QFormLayout, QLineEdit, QSpinBox, QDialogButtonBox, QFileDialog,
-    QMessageBox
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
+    QDialog, QFormLayout, QLineEdit, QSpinBox, QDialogButtonBox,
+    QFileDialog, QMessageBox, QAbstractItemView, QMenuBar, QMenu
 )
 
 
@@ -14,7 +15,8 @@ class EditDialog(QDialog):
     def __init__(self, level, title, page_number, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Edit Row")
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags()
+                            & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         screen = QApplication.primaryScreen()
         if sys.platform.startswith("darwin"):
@@ -31,11 +33,13 @@ class EditDialog(QDialog):
         self.title_input = QLineEdit(title)
         self.page_input = QSpinBox()
         self.page_input.setMinimum(1)
-        self.page_input.setMaximum(2**31 - 1)  # cancel default 99
+        self.page_input.setMaximum(2**31 - 1)
         if page_number is not None:
             self.page_input.setValue(page_number)
 
-        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
 
@@ -50,12 +54,12 @@ class EditDialog(QDialog):
         return self.level_input.value(), self.title_input.text(), self.page_input.value()
 
 
-class TocRefinement(QWidget):
+class TocRefinement(QMainWindow):
     def __init__(self):
         super().__init__()
         
         self.setWindowTitle("TOC Refinement")
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
         screen = QApplication.primaryScreen()
         if sys.platform.startswith("darwin"):  # macOS
@@ -66,195 +70,317 @@ class TocRefinement(QWidget):
         self.screen_height = screen.geometry().height()
         self.screen_width = screen.geometry().width()
 
-        # Create UI elements
-        # Left column
-        self.table = QTableWidget(0, 3)
-        self.table.setStyleSheet(f"font-size: {font_size}px;")
-        self.table.setHorizontalHeaderLabels(["Level", "Title", "#Page"])
-        self.table.verticalHeader().setVisible(False)
-        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.table.setSelectionBehavior(QTableWidget.SelectRows)
-        # Prevent last column from stretching
-        self.table.horizontalHeader().setStretchLastSection(False)
+        # --- Tree widget ---
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Title", "Page"])
+        self.tree.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.tree.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
+        self.tree.setColumnCount(2)
+        self.tree.header().setStretchLastSection(False)
+        self.tree.header().setSectionResizeMode(
+            0, self.tree.header().ResizeMode.Stretch)
+        self.tree.header().setSectionResizeMode(
+            1, self.tree.header().ResizeMode.ResizeToContents)
+        self.tree.setStyleSheet(
+            f"font-family: 'Microsoft YaHei', sans-serif; font-size: {font_size}px;"
+        )
 
-        # Right column
-        import_button = QPushButton("Import")
-        import_button.setStyleSheet(f"font-size: {font_size}px;")
-        import_button.clicked.connect(self.import_from_file)
-        export_button = QPushButton("Export")
-        export_button.setStyleSheet(f"font-size: {font_size}px;")
-        export_button.clicked.connect(self.export_to_file)
-        move_up_button = QPushButton("Move Up")
-        move_up_button.setStyleSheet(f"font-size: {font_size}px;")
-        move_up_button.clicked.connect(self.move_up)
-        move_down_button = QPushButton("Move Down")
-        move_down_button.setStyleSheet(f"font-size: {font_size}px;")
-        move_down_button.clicked.connect(self.move_down)
-        increase_indent_button = QPushButton("Increase Level")
-        increase_indent_button.setStyleSheet(f"font-size: {font_size}px;")
-        increase_indent_button.clicked.connect(self.increase_indents)
-        decrease_indent_button = QPushButton("Decrease Level")
-        decrease_indent_button.setStyleSheet(f"font-size: {font_size}px;")
-        decrease_indent_button.clicked.connect(self.decrease_indents)
-        add_button = QPushButton("Add")
-        add_button.setStyleSheet(f"font-size: {font_size}px;")
-        add_button.clicked.connect(self.add_row)
-        edit_button = QPushButton("Edit")
-        edit_button.setStyleSheet(f"font-size: {font_size}px;")
-        edit_button.clicked.connect(self.edit_row)
-        delete_button = QPushButton("Delete")
-        delete_button.setStyleSheet(f"font-size: {font_size}px;")
-        delete_button.clicked.connect(self.delete_rows)
-        done_button = QPushButton("Done")
-        done_button.setStyleSheet(f"font-size: {font_size}px;")
-        done_button.clicked.connect(self.close)
+        # --- Menu bar actions ---
+        # File menu
+        import_act = QAction("&Import", self)
+        import_act.triggered.connect(self.import_from_file)
 
-        # Layouts
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(self.table)
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(import_button)
-        right_layout.addWidget(export_button)
-        right_layout.addWidget(move_up_button)
-        right_layout.addWidget(move_down_button)
-        right_layout.addWidget(increase_indent_button)
-        right_layout.addWidget(decrease_indent_button)
-        right_layout.addWidget(add_button)
-        right_layout.addWidget(edit_button)
-        right_layout.addWidget(delete_button)
-        right_layout.addStretch()
-        right_layout.addWidget(done_button)
-        layout = QHBoxLayout()
-        layout.addLayout(left_layout)
-        layout.addLayout(right_layout)
-        self.setLayout(layout)
+        export_act = QAction("&Export", self)
+        export_act.setShortcut("Ctrl+S")
+        export_act.triggered.connect(self.export_to_file)
 
-        # Set window dimensions
-        window_width = round(self.screen_width / 2)
-        window_height = round(self.screen_height / 2)
+        self.accept_ = False
+        done_act = QAction("&Accept", self)
+        done_act.triggered.connect(self.accept)
+
+        discard_act = QAction("&Discard", self)
+        discard_act.setShortcut("Ctrl+W")
+        discard_act.triggered.connect(self.close)
+
+        # Edit menu
+        add_act = QAction("&Add", self)
+        add_act.setShortcut("T")
+        add_act.triggered.connect(self.add_row)
+
+        edit_act = QAction("&Edit", self)
+        edit_act.setShortcut("F2")
+        edit_act.triggered.connect(self.edit_row)
+
+        delete_act = QAction("&Delete", self)
+        delete_act.setShortcut("Del")
+        delete_act.triggered.connect(self.delete_rows)
+
+        move_up_act = QAction("Move &up", self)
+        move_up_act.setShortcut("W")
+        move_up_act.triggered.connect(self.move_up)
+
+        move_down_act = QAction("Move &down", self)
+        move_down_act.setShortcut("S")
+        move_down_act.triggered.connect(self.move_down)
+
+        increase_level_act = QAction("D&owngrade", self)
+        increase_level_act.setShortcut("D")
+        increase_level_act.triggered.connect(self.increase_level)
+
+        decrease_level_act = QAction("&Promote", self)
+        decrease_level_act.setShortcut("A")
+        decrease_level_act.triggered.connect(self.decrease_level)
+
+        # Assemble menus
+        file_menu = QMenu("&File", self)
+        file_menu.addActions([import_act, export_act, done_act])
+
+        edit_menu = QMenu("&Edit", self)
+        edit_menu.addActions([
+            add_act, edit_act, delete_act,
+            move_up_act, move_down_act,
+            increase_level_act, decrease_level_act,
+        ])
+
+        menu_bar = QMenuBar(self)
+        menu_bar.addMenu(file_menu)
+        menu_bar.addMenu(edit_menu)
+        self.setMenuBar(menu_bar)
+
+        # --- Central widget ---
+        central = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(self.tree)
+        central.setLayout(layout)
+        self.setCentralWidget(central)
+
+        # Window geometry
+        window_width = round(self.screen_width / 3)
+        window_height = round(min(window_width * 1.5, self.screen_height))
         x = round((self.screen_width - window_width) / 2)
         y = round((self.screen_height - window_height) / 2)
         self.setGeometry(x, y, window_width, window_height)
 
+
+    def accept(self):
+        self.accept_ = True
+        self.export_to_file()
+        self.close()
+
+    # ------------------------------------------------------------------
+    # Tree helpers
+    # ------------------------------------------------------------------
+
+    def _all_top_level_items(self):
+        """Iterate all items via flat DFS traversal, yielding (item, level)."""
+        result = []
+        def _walk(item, level):
+            result.append((item, level))
+            for i in range(item.childCount()):
+                _walk(item.child(i), level + 1)
+        for i in range(self.tree.topLevelItemCount()):
+            _walk(self.tree.topLevelItem(i), 1)
+        return result
+
+    def _flatten(self):
+        """Return list of dicts with level/title/page_number for every node."""
+        rows = []
+        for item, level in self._all_top_level_items():
+            title = item.text(0)
+            page_str = item.text(1)
+            try:
+                page = int(page_str)
+            except (ValueError, TypeError):
+                page = None
+            rows.append({"level": level, "title": title, "page_number": page})
+        return rows
+
+    def _get_expanded_states(self):
+        """Return a set of flat indices that are currently expanded."""
+        expanded = set()
+        for idx, (item, _) in enumerate(self._all_top_level_items()):
+            if item.isExpanded():
+                expanded.add(idx)
+        return expanded
+
+    def _rebuild_tree(self, rows, expanded=None):
+        """Rebuild the tree from a flat list of {level, title, page_number}."""
+        if expanded is None:
+            expanded = self._get_expanded_states()
+
+        self.tree.clear()
+        stack = []
+        for row in rows:
+            level = row["level"] or 1
+            title = row["title"] or ""
+            page = row["page_number"]
+            page_str = str(page) if page is not None else ""
+
+            node = QTreeWidgetItem([title, page_str])
+
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+
+            if stack:
+                stack[-1][1].addChild(node)
+            else:
+                self.tree.addTopLevelItem(node)
+
+            stack.append((level, node))
+
+        # Restore expanded states
+        all_items = self._all_top_level_items()
+        for idx, (item, _) in enumerate(all_items):
+            if idx in expanded:
+                item.setExpanded(True)
+
+        self.tree.resizeColumnToContents(1)
+        self.tree.header().setStretchLastSection(False)
+        self.tree.header().setSectionResizeMode(
+            0, self.tree.header().ResizeMode.Stretch)
+        self.tree.header().setSectionResizeMode(
+            1, self.tree.header().ResizeMode.ResizeToContents)
+
+    def _selected_flat_indices(self):
+        """Return flat-order indices of selected items."""
+        selected = set(id(item) for item in self.tree.selectedItems())
+        indices = []
+        for idx, (item, _) in enumerate(self._all_top_level_items()):
+            if id(item) in selected:
+                indices.append(idx)
+        return sorted(indices)
+
+    # ------------------------------------------------------------------
+    # Slot implementations
+    # ------------------------------------------------------------------
+
     def selected_rows(self, single=False):
-        model = self.table.selectionModel()
-        rows = [index.row() for index in model.selectedRows()]
+        indices = self._selected_flat_indices()
         if single:
-            return rows[0] if len(rows) > 0 else None
-        else:
-            return rows
+            return indices[0] if indices else None
+        return indices
 
     def add_row(self):
-        row = self.selected_rows(single=True)
-        if row:
-            row += 1  # insert below selected row
+        idx = self.selected_rows(single=True)
+        rows = self._flatten()
+        if idx is not None:
+            current_level = rows[idx]["level"] or 1
+            insert_at = idx + 1
+            while insert_at < len(rows) and (
+                    rows[insert_at]["level"] or 1) > current_level:
+                insert_at += 1
         else:
-            row = self.table.rowCount()
-        dialog = EditDialog(1, "", 1, self)
-        if dialog.exec_():
-            new_level, new_title, new_page_number = dialog.get_values()
-            self.table.insertRow(row)
-            self.table.setItem(row, 0, QTableWidgetItem(str(new_level)))
-            self.table.setItem(row, 1,
-                               QTableWidgetItem(" " * (new_level - 1) + new_title))
-            self.table.setItem(row, 2, QTableWidgetItem(str(new_page_number)))
+            current_level = 1
+            insert_at = len(rows)
+        dialog = EditDialog(current_level, "", 1, self)
+        if dialog.exec():
+            lv, title, pn = dialog.get_values()
+            rows.insert(insert_at, {
+                "level": lv, "title": title, "page_number": pn
+            })
+            self._rebuild_tree(rows)
 
-    def move_up(self):
-        row = self.selected_rows(single=True)
-        if row is not None and row > 0:
-            self.swap_rows(row, row - 1)
-
-    def move_down(self):
-        row = self.selected_rows(single=True)
-        if row is not None and row < self.table.rowCount() - 1:
-            self.swap_rows(row, row + 1)
-
-    def increase_indents(self):
-        for row in self.selected_rows():
-            level, title, _ = self.clean_row(row)
-            if level is not None:
-                level += 1
-                item_level = QTableWidgetItem(str(level))
-                item_title = QTableWidgetItem(" " * (level - 1) + title)
-                self.table.setItem(row, 0, item_level)
-                self.table.setItem(row, 1, item_title)
-
-    def decrease_indents(self):
-        for row in self.selected_rows():
-            level, title, _ = self.clean_row(row)
-            if (level is not None) and level > 1:
-                level -= 1
-                item_level = QTableWidgetItem(str(level))
-                item_title = QTableWidgetItem(" " * (level - 1) + title)
-                self.table.setItem(row, 0, item_level)
-                self.table.setItem(row, 1, item_title)
-
-    def delete_rows(self):
-        rows = self.selected_rows()
-        rows = sorted(rows, reverse=True)
-        for row in rows:
-            self.table.removeRow(row)
-
-    def swap_rows(self, row_1, row_2):
-        level_1 = self.table.item(row_1, 0).text()
-        title_1 = self.table.item(row_1, 1).text()
-        page_number_1 = self.table.item(row_1, 2).text()
-        level_2 = QTableWidgetItem(self.table.item(row_2, 0).text())
-        title_2 = QTableWidgetItem(self.table.item(row_2, 1).text())
-        page_number_2 = QTableWidgetItem(self.table.item(row_2, 2).text())
-        self.table.setItem(row_1, 0, level_2)
-        self.table.setItem(row_1, 1, title_2)
-        self.table.setItem(row_1, 2, page_number_2)
-        self.table.setItem(row_2, 0, QTableWidgetItem(level_1))
-        self.table.setItem(row_2, 1, QTableWidgetItem(title_1))
-        self.table.setItem(row_2, 2, QTableWidgetItem(page_number_1))
-
-    def clean_row(self, row_id):
-        level = self.table.item(row_id, 0).text()
-        if level:
-            try:
-                level = int(level)
-            except ValueError:
-                level = None
-        else:
-            level = None
-        title = self.table.item(row_id, 1).text()
-        if level:
-            title = title.removeprefix(" " * (level - 1))
-        page_number = self.table.item(row_id, 2).text()
-        if page_number:
-            try:
-                page_number = int(page_number)
-            except ValueError:
-                page_number = None
-        else:
-            page_number = None
-        return level, title, page_number
 
     def edit_row(self):
-        row = self.selected_rows(single=True)
-        if row is not None:
-            dialog = EditDialog(*self.clean_row(row), self)
-            if dialog.exec_():
-                new_level, new_title, new_page_number = dialog.get_values()
-                self.table.setItem(row, 0, QTableWidgetItem(str(new_level)))
-                self.table.setItem(row, 1, QTableWidgetItem(
-                    " " * (new_level - 1) + new_title))
-                self.table.setItem(row, 2, QTableWidgetItem(str(new_page_number)))
+        idx = self.selected_rows(single=True)
+        if idx is None:
+            return
+        rows = self._flatten()
+        r = rows[idx]
+        dialog = EditDialog(r["level"], r["title"], r["page_number"], self)
+        if dialog.exec():
+            lv, title, pn = dialog.get_values()
+            rows[idx] = {"level": lv, "title": title, "page_number": pn}
+            self._rebuild_tree(rows)
+
+    def delete_rows(self):
+        indices = set(self.selected_rows())
+        if not indices:
+            return
+        rows = self._flatten()
+        rows = [r for i, r in enumerate(rows) if i not in indices]
+        self._rebuild_tree(rows)
+
+    def move_up(self):
+        idx = self.selected_rows(single=True)
+        if idx is not None and idx > 0:
+            rows = self._flatten()
+            rows[idx], rows[idx - 1] = rows[idx - 1], rows[idx]
+            self._rebuild_tree(rows)
+            self._select_by_flat_index(idx - 1)
+
+    def move_down(self):
+        idx = self.selected_rows(single=True)
+        rows = self._flatten()
+        if idx is not None and idx < len(rows) - 1:
+            rows[idx], rows[idx + 1] = rows[idx + 1], rows[idx]
+            self._rebuild_tree(rows)
+            self._select_by_flat_index(idx + 1)
+
+    def _select_by_flat_index(self, flat_idx):
+        """Select the item at the given flat-order index."""
+        items = self._all_top_level_items()
+        if 0 <= flat_idx < len(items):
+            item, _ = items[flat_idx]
+            self.tree.setCurrentItem(item)
+
+    def increase_level(self):
+        indices = set(self.selected_rows())
+        if not indices:
+            return
+        rows = self._flatten()
+        visited = set()
+        for i in indices:
+            if i in visited:
+                continue
+            visited.add(i)
+            rows[i]["level"] = (rows[i]["level"] or 1) + 1
+            # Cascade to children (all subsequent rows with level > original level)
+            parent_level = rows[i]["level"] - 1  # original level before increase
+            for j in range(i + 1, len(rows)):
+                if (rows[j]["level"] or 1) > parent_level:
+                    if j not in indices:  # only auto-cascade non-selected
+                        rows[j]["level"] = (rows[j]["level"] or 1) + 1
+                        visited.add(j)
+                else:
+                    break
+        self._rebuild_tree(rows)
+
+    def decrease_level(self):
+        indices = set(self.selected_rows())
+        if not indices:
+            return
+        rows = self._flatten()
+        visited = set()
+        for i in indices:
+            if i in visited:
+                continue
+            visited.add(i)
+            lv = rows[i]["level"] or 1
+            if lv <= 1:
+                continue
+            rows[i]["level"] = lv - 1
+            # Cascade to children
+            for j in range(i + 1, len(rows)):
+                if (rows[j]["level"] or 1) > lv:
+                    child_lv = rows[j]["level"] or 1
+                    if child_lv > 1:
+                        rows[j]["level"] = child_lv - 1
+                        visited.add(j)
+                else:
+                    break
+        self._rebuild_tree(rows)
 
     def show(self):
         super().show()
-        # simulate stretch "title" column width
-        self.table.resizeColumnsToContents()
-        width = self.table.width()
-        for i in range(self.table.columnCount()):
-            if i == 1: continue  # skip "title" column itself
-            width -= self.table.columnWidth(i)
-        self.table.setColumnWidth(1, width - 2)
+        self.tree.resizeColumnToContents(0)
+        self.tree.resizeColumnToContents(1)
 
     def import_from_file(self):
         fp = get_file()
-        if os.path.isfile(fp):
+        if fp and os.path.isfile(fp):
             toc = pd.read_pickle(fp)
             assert toc.columns.tolist() == ['level', 'title', 'page_number'], (
                 "The format of imported TOC is invalid."
@@ -269,43 +395,30 @@ class TocRefinement(QWidget):
             toc.to_pickle(fn)
 
     def get_table(self):
-        toc = []
-        for row in range(self.table.rowCount()):
-            level, title, page_number = self.clean_row(row)
-            toc.append({
-                "level": level or pd.NA,
-                "title": title or pd.NA,
-                "page_number": page_number or pd.NA,
-            })
-        toc = pd.DataFrame(toc)
-        return toc
+        rows = self._flatten()
+        if not rows:
+            raise Exception("TOC is empty.")
+        for r in rows:
+            if r["level"] is None:
+                r["level"] = pd.NA
+            if not r["title"]:
+                r["title"] = pd.NA
+            if r["page_number"] is None:
+                r["page_number"] = pd.NA
+        return pd.DataFrame(rows)
 
     def set_table(self, df):
-        df['level'] = pd.to_numeric(df['level'], errors='coerce')
-        df['level'] = df['level'].astype('Int64')
-        df['page_number'] = pd.to_numeric(df['page_number'], errors='coerce')
-        df['page_number'] = df['page_number'].astype('Int64')
-        self.table.setRowCount(df.shape[0])
-        for i, (level, title, page_number) in df.iterrows():
-            if pd.isna(level):
-                item_level = QTableWidgetItem()
-            else:
-                item_level = QTableWidgetItem(str(level))
-            self.table.setItem(i, 0, item_level)
-            if pd.isna(title):
-                item_title = QTableWidgetItem()
-            else:
-                if pd.isna(level):
-                    item_title_text = str(title)
-                else:
-                    item_title_text = " " * (level - 1) + str(title)
-                item_title = QTableWidgetItem(item_title_text)
-            self.table.setItem(i, 1, item_title)
-            if pd.isna(page_number):
-                item_page_number = QTableWidgetItem()
-            else:
-                item_page_number = QTableWidgetItem(str(page_number))
-            self.table.setItem(i, 2, item_page_number)
+        df = df.copy()
+        df['level'] = pd.to_numeric(df['level'], errors='coerce').round()
+        df['page_number'] = pd.to_numeric(df['page_number'], errors='coerce').round()
+        df = df.convert_dtypes()
+        rows = []
+        for _, (level, title, page_number) in df.iterrows():
+            lv = None if pd.isna(level) else int(level)
+            t = "" if pd.isna(title) else str(title)
+            pn = None if pd.isna(page_number) else int(page_number)
+            rows.append({"level": lv, "title": t, "page_number": pn})
+        self._rebuild_tree(rows)
 
 
 def get_file():
@@ -320,8 +433,18 @@ def get_file():
     else:
         # Display an error message box
         error_box = QMessageBox()
-        error_box.setIcon(QMessageBox.Critical)
+        error_box.setIcon(QMessageBox.Icon.Critical)
         error_box.setWindowTitle("Error")
         error_box.setText("The selected file path is invalid.")
-        error_box.setStandardButtons(QMessageBox.Ok)
+        error_box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        error_box.setWindowFlags(
+            error_box.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        error_box.exec()
         return None
+
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    w = TocRefinement()
+    w.show()
+    sys.exit(app.exec())

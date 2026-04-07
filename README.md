@@ -1,7 +1,8 @@
 # TOC to bookmarks
  Automatically create bookmarks from "table of content" for `*.pdf` books
 
-![](https://shields.io/badge/dependencies-Python_3.12-blue)
+![](https://shields.io/badge/dependencies-Python_3.14-blue)
+![](https://shields.io/badge/dependencies-CUDA_≥_13.0-darkgreen)
 
 ## Acknowledgement
 
@@ -13,9 +14,9 @@ Few pages from "Partial Differential Equations" by "Lawrence C. Evans" are used 
 
 Create and activate a Python virtual environment.
 
-If you want to operate OCR with graphic card, choose the [suitable](https://pytorch.org/get-started/locally/) `torch` version.
-
-Run `pip install -r requirements.txt`.
+```
+pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu130
+```
 
 ## Usage
 
@@ -68,20 +69,24 @@ If you disabled OCR, only the third page will be asked.
 
 If you enabled OCR, OCR may be inaccurate; if you disabled OCR, you have to manually input the TOC. Anyway, you need to manually edit TOC.
 
-This program includes a tool to:
+Features:
 
-- Move up or down single row[^1].
-- Increase or decrease level (indent) of multiple rows[^2].
-- Add a new row below the single selected row.
-- Edit single row.
-- Delete multiple rows.
+| Shortcut | Function  | Description                                                  |
+| -------- | --------- | ------------------------------------------------------------ |
+| W        | Move Up   | Move up a single row.                                        |
+| S        | Move Down | Move down a single row.                                      |
+| A        | Promote   | When the selected items are children of the item above, take them out to be sibling of their original parent item. |
+| D        | Downgrade | Let selected items be the children of the item above.        |
+| Shift    |           | Select a starting item, hold "Shift" and select an ending item, the items between them will be all selected. |
+| Ctrl+A   |           | Select all items.                                            |
+| F2       | Edit      | Edit single row.                                             |
+| T        | New       | Create a new item below the single selected item. If multiple rows are selected, use the first one. |
+| Del      | Delete    | Delete multiple rows.                                        |
 
-[^1]: If multiple rows are selected, use the first one.
-[^2]: `Shift` and `Ctrl+A` are supported.
 
-![](./assets/Snipaste_2025-01-19_17-34-03.png)
+![image-20260408003943346](./assets/image-20260408003943346.png)
 
-Click "Done" if you are satisfied with the result.
+Select "File > Accept" if you are satisfied with the result.
 
 ### 4. Get the result
 
